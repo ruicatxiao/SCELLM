@@ -104,7 +104,7 @@ inspect_active_seurat_tool <- tool(
     
     # 2. Check for cached object
     if (!exists(object_name, envir = .GlobalEnv)) {
-      return(paste("❌ No object found named", object_name, "- Please load a file first."))
+      return(paste("No object found named", object_name, "- Please load a file first."))
     }
     
     obj <- get(object_name, envir = .GlobalEnv)
@@ -132,7 +132,7 @@ inspect_active_seurat_tool <- tool(
     
     # 4. Return comprehensive list
     list(
-      status = "✅ Object Inspected",
+      status = "Object Inspected",
       num_cells = ncol(obj),
       num_features = nrow(obj),
       active_assay = DefaultAssay(obj),
