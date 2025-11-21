@@ -33,8 +33,6 @@ create_seurat_llm_agent <- function(
     "5. To search for genes, call 'list_genes' with an optional pattern (e.g. 'CD', 'IL', 'MT-').",
     "6. When asked to plot, always use 'plot_seurat'.",
     "7. You cannot see the plot immediately.",
-    "8. After plotting you MUST respond with:",
-    "   'I have displayed the plot. If you want me to analyze it, please run analyze_last_plot()'.",
     "",
     if (!is.null(system_prompt_suffix)) system_prompt_suffix else "",
     sep = "\n"
@@ -184,13 +182,13 @@ create_seurat_llm_agent <- function(
         list(
           status = "ok",
           message = sprintf(
-            "Successfully downloaded s3://%s/%s to %s (%s MB)",
+            "Successfully downloaded s3://%s/%s to %s (%s MB). Use this file_path with load_seurat_object.",
             bucket,
             object_key,
             local_path,
             file_size_mb
           ),
-          local_path = local_path,
+          file_path = local_path,
           size_megabytes = file_size_mb,
           bucket = bucket,
           object_key = object_key
@@ -210,7 +208,8 @@ create_seurat_llm_agent <- function(
     description = paste(
       "Fetch a file from Amazon S3 and save it locally.",
       "Requires AWS credentials to be configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).",
-      "Use this before 'load_seurat_object' if the RDS file is stored in S3."
+      "Use this before 'load_seurat_object' if the RDS file is stored in S3.",
+      "Returns a 'file_path' field that should be passed directly to 'load_seurat_object'."
     ),
     arguments = list(
       bucket = ellmer::type_string(
@@ -222,7 +221,7 @@ create_seurat_llm_agent <- function(
         required = TRUE
       ),
       local_path = ellmer::type_string(
-        "Local file path where the object will be saved. If not provided, saves to data_root with the object's basename.",
+        "Local file path where the object will be saved. If not provided, saves to data_root with the object's basename. The resulting path will be returned as 'file_path' for use with load_seurat_object.",
         required = FALSE
       ),
       region = ellmer::type_string(
