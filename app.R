@@ -60,14 +60,7 @@ ui <- fluidPage(
           list(
             role = "assistant",
             content = paste(
-              "Upload a Seurat .rds file on the left, then ask me things like:",
-              "",
-              "- 'Inspect metadata'",
-              "- 'List genes' or 'Search for CD genes'",
-              "- 'Plot the UMAP colored by clusters'",
-              "- 'Plot gene CD3D expression'",
-              "",
-              "After I plot, press the 'Analyze last plot' button."
+              "Upload a Seurat .rds file on the left, or specify and S3 bucket and key"
             )
           )
         )
@@ -77,7 +70,6 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-
   current_plot <- reactiveVal(NULL)
 
   observe({

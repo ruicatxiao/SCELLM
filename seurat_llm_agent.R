@@ -6,7 +6,7 @@ create_seurat_llm_agent <- function(
   default_object_name = ".active_seurat",
   system_prompt_suffix = NULL
 ) {
-  required_packages <- c("ellmer", "Seurat", "ggplot2", "grid")
+  required_packages <- c("ellmer", "Seurat", "ggplot2", "grid", "aws.s3")
 
   for (package_name in required_packages) {
     if (!requireNamespace(package_name, quietly = TRUE)) {
@@ -27,12 +27,13 @@ create_seurat_llm_agent <- function(
     "",
     "Tools and behavior:",
     "1. To discover available RDS files, call the tool 'list_rds_files'.",
-    "2. To load a Seurat object, call 'load_seurat_object' before plotting.",
-    "3. To inspect metadata and cluster identities, call 'inspect_active_seurat'.",
-    "4. To search for genes, call 'list_genes' with an optional pattern (e.g. 'CD', 'IL', 'MT-').",
-    "5. When asked to plot, always use 'plot_seurat'.",
-    "6. You cannot see the plot immediately.",
-    "7. After plotting you MUST respond with:",
+    "2. To fetch data from S3, call 'fetch_from_s3'.",
+    "3. To load a Seurat object, call 'load_seurat_object' before plotting.",
+    "4. To inspect metadata and cluster identities, call 'inspect_active_seurat'.",
+    "5. To search for genes, call 'list_genes' with an optional pattern (e.g. 'CD', 'IL', 'MT-').",
+    "6. When asked to plot, always use 'plot_seurat'.",
+    "7. You cannot see the plot immediately.",
+    "8. After plotting you MUST respond with:",
     "   'I have displayed the plot. If you want me to analyze it, please run analyze_last_plot()'.",
     "",
     if (!is.null(system_prompt_suffix)) system_prompt_suffix else "",
@@ -128,7 +129,110 @@ create_seurat_llm_agent <- function(
     )
   )
 
-  # TOOL 2: Load Seurat Object
+  # TOOL 2: Fetch from S3
+  fetch_from_s3_tool <- ellmer::tool(
+    function(bucket,
+             object_key,
+             local_path = NULL,
+             region = "us-east-1") {
+
+      bucket <- if (is.list(bucket)) unlist(bucket)[1] else bucket
+      object_key <- if (is.list(object_key)) unlist(object_key)[1] else object_key
+      local_path <- if (is.list(local_path)) unlist(local_path)[1] else local_path
+      region <- if (is.list(region)) unlist(region)[1] else region
+
+      tryCatch({
+        if (is.null(local_path) || nchar(local_path) == 0) {
+          file_extension <- tools::file_ext(object_key)
+          if (nchar(file_extension) > 0) {
+            local_path <- file.path(
+              state_environment$data_root,
+              basename(object_key)
+            )
+          } else {
+            local_path <- file.path(
+              state_environment$data_root,
+              paste0(basename(object_key), ".rds")
+            )
+          }
+        }
+
+        local_path <- normalizePath(local_path, mustWork = FALSE)
+
+        message(
+          sprintf(
+            "Fetching s3://%s/%s to %s",
+            bucket,
+            object_key,
+            local_path
+          )
+        )
+
+        aws.s3::save_object(
+          object = object_key,
+          bucket = bucket,
+          file = local_path,
+          region = region
+        )
+
+        if (!file.exists(local_path)) {
+          stop("File download succeeded but file not found at expected path.")
+        }
+
+        file_size_mb <- round(file.info(local_path)$size / 1024^2, 2)
+
+        list(
+          status = "ok",
+          message = sprintf(
+            "Successfully downloaded s3://%s/%s to %s (%s MB)",
+            bucket,
+            object_key,
+            local_path,
+            file_size_mb
+          ),
+          local_path = local_path,
+          size_megabytes = file_size_mb,
+          bucket = bucket,
+          object_key = object_key
+        )
+      }, error = function(error_condition) {
+        list(
+          status = "error",
+          message = paste(
+            "Error fetching from S3:",
+            error_condition$message,
+            "- Check bucket name, object key, and AWS credentials."
+          )
+        )
+      })
+    },
+    name = "fetch_from_s3",
+    description = paste(
+      "Fetch a file from Amazon S3 and save it locally.",
+      "Requires AWS credentials to be configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY).",
+      "Use this before 'load_seurat_object' if the RDS file is stored in S3."
+    ),
+    arguments = list(
+      bucket = ellmer::type_string(
+        "S3 bucket name (e.g. 'my-data-bucket').",
+        required = TRUE
+      ),
+      object_key = ellmer::type_string(
+        "S3 object key/path (e.g. 'data/seurat_object.rds').",
+        required = TRUE
+      ),
+      local_path = ellmer::type_string(
+        "Local file path where the object will be saved. If not provided, saves to data_root with the object's basename.",
+        required = FALSE
+      ),
+      region = ellmer::type_string(
+        "AWS region (default: 'us-east-1').",
+        required = FALSE
+      )
+    )
+  )
+
+  # TOOL 3: Load Seurat Object
   load_seurat_object_tool <- ellmer::tool(
     function(file_path, object_name = state_environment$default_object_name) {
       file_path <- if (is.list(file_path)) unlist(file_path)[1] else file_path
@@ -195,7 +299,7 @@ create_seurat_llm_agent <- function(
     )
   )
 
-  # TOOL 3: Inspect Metadata (Fuzzy Match)
+  # TOOL 4: Inspect Metadata (Fuzzy Match)
   inspect_active_seurat_tool <- ellmer::tool(
     function(object_name = state_environment$default_object_name) {
       object_name <- if (is.list(object_name)) unlist(object_name)[1] else object_name
@@ -274,7 +378,7 @@ create_seurat_llm_agent <- function(
     )
   )
 
-  # TOOL 4: List Available Genes
+  # TOOL 5: List Available Genes
   list_genes_tool <- ellmer::tool(
     function(pattern = NULL,
              object_name = state_environment$default_object_name,
@@ -376,7 +480,7 @@ create_seurat_llm_agent <- function(
     )
   )
 
-  # TOOL 5: Universal Seurat Plotter
+  # TOOL 6: Universal Seurat Plotter
   plot_seurat_tool <- ellmer::tool(
     function(feature,
              type = "auto",
@@ -524,6 +628,7 @@ create_seurat_llm_agent <- function(
   )
 
   chat$register_tool(list_rds_files_tool)
+  chat$register_tool(fetch_from_s3_tool)
   chat$register_tool(load_seurat_object_tool)
   chat$register_tool(inspect_active_seurat_tool)
   chat$register_tool(list_genes_tool)
