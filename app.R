@@ -1,6 +1,4 @@
-# app.R --------------------------------------------------------------
-
-options(shiny.maxRequestSize = 1024^3)  # allow big .rds uploads
+options(shiny.maxRequestSize = 1024^3)
 
 library(shiny)
 library(bslib)
@@ -11,18 +9,13 @@ library(base64enc)
 
 source("seurat_llm_agent.R")
 
-# simple string concat helper
 `%+%` <- function(lhs, rhs) paste0(lhs, rhs)
-
-# ------------------------------------------------------------------------------
-# Create the Seurat LLM agent once per R session
-# ------------------------------------------------------------------------------
 
 agent <- create_seurat_llm_agent(
   base_url = "http://127.0.0.1:1234/v1/",
   api_key  = "lm-studio",
   model    = "qwen/qwen3-vl-8b",
-  data_root = ".",                      # not used now, we upload instead
+  data_root = ".",
   system_prompt_suffix =
     "You are running inside an R Shiny app.\n" %+%
     "- The Seurat object is loaded for you into '.active_seurat' when the user uploads an .rds file.\n" %+%
@@ -34,11 +27,7 @@ agent <- create_seurat_llm_agent(
 )
 
 chat_client <- agent$chat
-agent_state <- agent$state   # has $last_plot_path and $default_object_name
-
-# ------------------------------------------------------------------------------
-# UI
-# ------------------------------------------------------------------------------
+agent_state <- agent$state
 
 ui <- fluidPage(
   theme = bs_theme(bootswatch = "flatly"),
@@ -87,16 +76,10 @@ ui <- fluidPage(
   )
 )
 
-# ------------------------------------------------------------------------------
-# Server
-# ------------------------------------------------------------------------------
-
 server <- function(input, output, session) {
 
-  # Reactive value to track plot path changes
   current_plot <- reactiveVal(NULL)
 
-  # Poll for changes to agent_state$last_plot_path every 500ms
   observe({
     invalidateLater(500)
 
@@ -109,7 +92,6 @@ server <- function(input, output, session) {
     }
   })
 
-  # 1) Load uploaded Seurat object into the name expected by the agent
   observeEvent(input$seurat_rds, {
     req(input$seurat_rds)
 
@@ -150,7 +132,6 @@ server <- function(input, output, session) {
     )
   })
 
-  # 2) Show basic summary of the active Seurat object
   output$object_summary <- renderUI({
     if (!exists(agent_state$default_object_name, envir = .GlobalEnv)) {
       return(helpText("No Seurat object loaded yet."))
@@ -169,10 +150,8 @@ server <- function(input, output, session) {
     )
   })
 
-  # 3) Hook chat UI <-> ellmer chat client
   shinychat::chat_mod_server("llm_chat", chat_client)
 
-  # 4) "Analyze last plot" button
   observeEvent(input$analyze_plot, {
     plot_path <- current_plot()
 
@@ -184,7 +163,6 @@ server <- function(input, output, session) {
       return(NULL)
     }
 
-    # stream an analysis response into the chat
     analysis_stream <- chat_client$stream(
       "Analyze the biological patterns and cluster-level differences in this plot.",
       ellmer::content_image_file(plot_path)
@@ -210,12 +188,10 @@ server <- function(input, output, session) {
     )
   }, deleteFile = FALSE)
 
-  # When thumbnail clicked, show modal with zoomable plot
   observeEvent(input$plot_click, {
     plot_path <- current_plot()
     req(plot_path, file.exists(plot_path))
 
-    # Read the image and convert to base64 for display
     img_data <- base64enc::base64encode(plot_path)
 
     showModal(

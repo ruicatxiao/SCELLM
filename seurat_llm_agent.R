@@ -11,16 +11,12 @@ create_seurat_llm_agent <- function(
   for (package_name in required_packages) {
     if (!requireNamespace(package_name, quietly = TRUE)) {
       stop(
-        sprintf(
-          "Package '%s' is required but not installed.",
-          package_name
-        ),
+        sprintf("Package '%s' is required but not installed.", package_name),
         call. = FALSE
       )
     }
   }
 
-  # Internal state ---------------------------------------------------------
   state_environment <- new.env(parent = emptyenv())
   state_environment$last_plot_path <- NULL
   state_environment$default_object_name <- default_object_name
@@ -302,7 +298,6 @@ create_seurat_llm_agent <- function(
       seurat_object <- get(object_name, envir = .GlobalEnv)
       all_genes <- rownames(seurat_object)
 
-      # Filter by pattern if provided
       if (!is.null(pattern) && nchar(pattern) > 0) {
         matched_genes <- grep(
           pattern = pattern,
@@ -325,7 +320,6 @@ create_seurat_llm_agent <- function(
           ))
         }
 
-        # Limit results
         display_genes <- head(matched_genes, max_results)
         more_available <- length(matched_genes) > max_results
 
@@ -344,7 +338,6 @@ create_seurat_llm_agent <- function(
           more_available = more_available
         )
       } else {
-        # No pattern - return sample of genes
         display_genes <- head(all_genes, max_results)
         more_available <- length(all_genes) > max_results
 
