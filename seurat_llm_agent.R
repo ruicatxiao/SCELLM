@@ -32,7 +32,8 @@ create_seurat_llm_agent <- function(
     "4. To inspect metadata and cluster identities, call 'inspect_active_seurat'.",
     "5. To search for genes, call 'list_genes' with an optional pattern (e.g. 'CD', 'IL', 'MT-').",
     "6. When asked to plot, always use 'plot_seurat'.",
-    "7. You cannot see the plot immediately.",
+    "7. When asked to analyze a plot, call 'get_plot_for_analysis' then include the image in your response using the returned path.",
+    "8. You cannot see plots directly - you must use the vision capabilities with the image file.",
     "",
     if (!is.null(system_prompt_suffix)) system_prompt_suffix else "",
     sep = "\n"
@@ -599,8 +600,7 @@ create_seurat_llm_agent <- function(
         mode = feature_mode,
         instruction = paste(
           "The plot is visible to the user.",
-          "Tell the user:",
-          "'I have displayed the plot. If you want me to analyze it, please run analyze_last_plot()'."
+          "If asked to analyze the plot, use the 'analyze_plot' tool."
         )
       )
     },
@@ -626,12 +626,44 @@ create_seurat_llm_agent <- function(
     )
   )
 
+  # TOOL 7: Get Last Plot Path for Analysis
+  get_plot_for_analysis_tool <- ellmer::tool(
+    function() {
+      if (is.null(state_environment$last_plot_path) ||
+          !file.exists(state_environment$last_plot_path)) {
+        return(list(
+          status = "error",
+          message = "No plot has been generated yet. Call 'plot_seurat' first to generate a plot."
+        ))
+      }
+
+      list(
+        status = "ok",
+        message = paste(
+          "Plot ready for analysis. The plot file is available at:",
+          state_environment$last_plot_path,
+          "You should now respond with your analysis by including the image in your response using ellmer::content_image_file()."
+        ),
+        plot_path = state_environment$last_plot_path,
+        instruction = "Include the image file in your next response to provide visual analysis."
+      )
+    },
+    name = "get_plot_for_analysis",
+    description = paste(
+      "Get the file path of the last generated plot so it can be included in the response for analysis.",
+      "After calling this tool, you must include the plot image in your response.",
+      "The image should be sent along with your analysis text."
+    ),
+    arguments = list()
+  )
+
   chat$register_tool(list_rds_files_tool)
   chat$register_tool(fetch_from_s3_tool)
   chat$register_tool(load_seurat_object_tool)
   chat$register_tool(inspect_active_seurat_tool)
   chat$register_tool(list_genes_tool)
   chat$register_tool(plot_seurat_tool)
+  chat$register_tool(get_plot_for_analysis_tool)
 
   # HELPER: The Vision Bridge
 
@@ -650,7 +682,11 @@ create_seurat_llm_agent <- function(
       ellmer::content_image_file(state_environment$last_plot_path)
     )
 
-    response
+    # Print the response directly (ellmer handles the printing)
+    print(response)
+
+    # Return invisibly to avoid double printing
+    invisible(response)
   }
 
   structure(

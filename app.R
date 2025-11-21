@@ -21,9 +21,7 @@ agent <- create_seurat_llm_agent(
     "- The Seurat object is loaded for you into '.active_seurat' when the user uploads an .rds file.\n" %+%
     "- Do NOT try to list or load files. Assume data is already loaded.\n" %+%
     "- You may call 'inspect_active_seurat', 'list_genes', and 'plot_seurat'.\n" %+%
-    "- Use 'list_genes' to search for available genes before plotting.\n" %+%
-    "- After plotting, always say exactly:\n" %+%
-    "  'I have displayed the plot. Use the \"Analyze last plot\" button in the app if you want me to analyze it.'\n"
+    "- Use 'list_genes' to search for available genes before plotting.\n"
 )
 
 chat_client <- agent$chat
